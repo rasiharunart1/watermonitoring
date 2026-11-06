@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Dokumentasi teknis sistem water monitoring ESP32 + ESP32-CAM: cara pakai, penjelasan kode, kalibrasi, dan integrasi backend.">
+<title>Dokumentasi — Water Monitoring + ESP32-CAM</title>
+<style>
+  :root {
+    --ink: #132027;
+    --ink-soft: #42545e;
+    --ink-faint: #6a7b85;
+    --bg: #fbfcfd;
+    --surface: #ffffff;
+    --line: #dde5e9;
+    --line-strong: #c3d0d6;
+
+    --water-900: #0b3a43;
+    --water-700: #0f5c6b;
+    --water-600: #117487;
+    --water-500: #14919f;
+    --water-100: #e1f2f4;
+    --water-050: #eef8f9;
+
+    --ph: #b3402a;
+    --ph-soft: #fbeae6;
+    --turb: #8a6d1f;
+    --turb-soft: #f7efe0;
+    --temp: #1d6fb8;
+    --temp-soft: #e7f1fa;
+    --relay: #5d5d67;
+    --relay-soft: #ececf0;
+
+    --ok: #1f7a4d;
+    --warn: #9a5b00;
+    --danger: #b3312c;
+
+    --radius: 7px;
+    --radius-sm: 5px;
+    --shadow: 0 1px 2px rgba(19, 32, 39, .06), 0 2px 8px rgba(19, 32, 39, .05);
+    --shadow-lg: 0 4px 18px rgba(19, 32, 39, .09);
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, Menlo, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.6;
+    font-size: 15.5px;
+  }
+
+  a { color: var(--water-700); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 268px minmax(0, 1fr);
+    gap: 0;
+    align-items: start;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--water-050);
+    border-right: 1px solid var(--line);
+    padding: 26px 20px 32px;
+  }
+  .sidebar .brand {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--water-900);
+    letter-spacing: .2px;
+    margin: 0 0 3px;
+  }
+  .sidebar .brand-sub {
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin: 0 0 20px;
+  }
+  .nav-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--ink-faint);
+    margin: 20px 0 8px;
+  }
+  .sidebar ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .sidebar li { margin: 0; }
+  .sidebar a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    line-height: 1.4;
+  }
+  .sidebar a:hover {
+    background: var(--water-100);
+    color: var(--water-900);
+    text-decoration: none;
+  }
+
+  /* ---------- Main ---------- */
+  main {
+    max-width: 920px;
+    padding: 40px 52px 120px;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    main { padding: 26px 22px 90px; }
+  }
+
+  .hero {
+    padding-bottom: 26px;
+    margin-bottom: 34px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero .kicker {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--water-600);
+    margin: 0 0 10px;
+  }
+  .hero h1 {
+    font-size: 31px;
+    line-height: 1.22;
+    letter-spacing: -.4px;
+    margin: 0 0 12px;
+    color: var(--water-900);
+  }
+  .hero p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 16.5px;
+    max-width: 62ch;
+  }
+
+  h2 {
+    font-size: 22px;
+    letter-spacing: -.3px;
+    margin: 52px 0 16px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line-strong);
+    color: var(--water-900);
+  }
+  h2:first-of-type { border-top: 0; }
+  h3 {
+    font-size: 17px;
+    letter-spacing: -.2px;
+    margin: 30px 0 10px;
+    color: var(--ink);
+  }
+  p, li { color: var(--ink-soft); }
+  strong { color: var(--ink); }
+  code {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--water-050);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 1px 5px;
+    color: var(--water-900);
+  }
+
+  /* ---------- Cards / callouts ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 18px 0; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14px; color: var(--ink); }
+  .card p { margin: 0; font-size: 13.5px; }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+  }
+  .tag--ph   { background: var(--ph-soft); color: var(--ph); }
+  .tag--turb { background: var(--turb-soft); color: var(--turb); }
+  .tag--temp { background: var(--temp-soft); color: var(--temp); }
+  .tag--relay{ background: var(--relay-soft); color: var(--relay); }
+  .tag--cam  { background: var(--water-100); color: var(--water-700); }
+
+  .callout {
+    border-left: 4px solid var(--water-500);
+    background: var(--water-050);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px;
+    margin: 18px 0;
+    font-size: 14px;
+  }
+  .callout.warn { border-left-color: var(--warn); background: #fbf3e6; }
+  .callout.danger { border-left-color: var(--danger); background: #fbeceb; }
+  .callout strong { display: block; margin-bottom: 3px; }
+
+  /* ---------- Tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; background: var(--surface); }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--water-050); color: var(--water-900); font-weight: 600; font-size: 12.5px; letter-spacing: .2px; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.mono, th.mono { font-family: var(--mono); font-size: 12.5px; }
+
+  /* ---------- Code blocks ---------- */
+  pre {
+    background: #0f1c22;
+    color: #d6e4ea;
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 16px 0;
+    box-shadow: var(--shadow-lg);
+  }
+  pre code {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+  }
+  .code-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    margin-bottom: -10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+
+  /* ---------- Illustrations ---------- */
+  .figure {
+    margin: 22px 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+  }
+  .figure svg { display: block; width: 100%; height: auto; }
+  .figure img { display: block; max-width: 100%; height: auto; margin: 0 auto; border-radius: var(--radius-sm); }
+  .figcaption {
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    margin-top: 12px;
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+
+  /* ---------- Formula ---------- */
+  .formula {
+    font-family: var(--mono);
+    font-size: 14.5px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin: 14px 0;
+    color: var(--water-900);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-faint);
+    font-size: 12.5px;
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <p class="brand">Water Monitoring</p>
+    <p class="brand-sub">ESP32 · ESP32-CAM · Backend</p>
+    <ul>
+      <li><a href="#arsitektur">1. Arsitektur Sistem</a></li>
+      <li><a href="#wiring">2. Hardware &amp; Wiring</a></li>
+      <li><a href="#library">3. Library</a></li>
+      <li><a href="#pakai-sensor">4. Cara Pakai Sensor</a></li>
+      <li><a href="#pakai-cam">5. Cara Pakai Kamera</a></li>
+      <li><a href="#kode-sensor">6. Penjelasan Kode Sensor</a></li>
+      <li><a href="#kode-cam">7. Penjelasan Kode Kamera</a></li>
+      <li><a href="#kalibrasi">8. Kalibrasi</a></li>
+      <li><a href="#backend">9. Integrasi Backend</a></li>
+      <li><a href="#modifikasi">10. Modifikasi Firmware</a></li>
+      <li><a href="#troubleshoot">11. Troubleshooting</a></li>
+    </ul>
+    <p class="nav-title">Lampiran</p>
+    <ul>
+      <li><a href="#lampiran-istilah">Istilah &amp; Singkatan</a></li>
+      <li><a href="#lampiran-pin">Referensi Pin Cepat</a></li>
+    </ul>
+  </aside>
+
+  <main>
+    <header class="hero">
+      <p class="kicker">Dokumentasi Teknis</p>
+      <h1>Water Monitoring + ESP32-CAM</h1>
+      <p>Panduan lengkap memakai, memahami, mengkalibrasi, dan mengintegrasikan dua firmware ESP32 — sensor kualitas air serta kamera streaming — ke backend dan web dashboard untuk client kamu.</p>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <span class="tag tag--ph">Sensor pH</span>
+        <h4>Water Monitoring ESP32</h4>
+        <p>pH · kekeruhan (turbidity) · suhu DS18B20 · relay. Kalibrasi 2 titik tersimpan permanen di NVS.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag--cam">Kamera</span>
+        <h4>ESP32-CAM Streaming</h4>
+        <p>Stream MJPEG via IP + portal konfigurasi WiFi tanpa menulis portal manual.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag--temp">Integrasi</span>
+        <h4>Backend FastAPI</h4>
+        <p>FastAPI (Python) + WebSocket + proxy MJPEG terpusat, siap terhubung ke web dashboard client.</p>
+      </div>
+    </div>
+
+    <h2 id="arsitektur">1. Arsitektur Sistem</h2>
+    <p>Dua <strong>node terpisah</strong> dipakai agar CPU ESP32-CAM tidak dibebani pembacaan ADC/timing OneWire, dan sensor tidak rebutan radio WiFi dengan stream video.</p>
+
+    <div class="figure">
+      <svg viewBox="0 0 820 330" role="img" aria-label="Diagram arsitektur: node sensor dan node kamera mengirim data ke backend FastAPI, lalu dashboard menampilkannya">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#6a7b85"/>
+          </marker>
+        </defs>
+
+        <!-- Node: Sensor -->
+        <g>
+          <rect x="20" y="40" width="250" height="230" rx="8" fill="#ffffff" stroke="#c3d0d6"/>
+          <rect x="20" y="40" width="250" height="34" rx="8" fill="#117487"/>
+          <rect x="20" y="60" width="250" height="14" fill="#117487"/>
+          <text x="32" y="62" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#ffffff">Node Sensor — ESP32 #1</text>
+
+          <g font-family="system-ui, sans-serif" font-size="12.5" fill="#132027">
+            <rect x="38" y="86" width="214" height="30" rx="5" fill="#eef8f9" stroke="#cfe5e9"/>
+            <text x="48" y="105">Modul pH (analog)</text>
+            <rect x="38" y="122" width="214" height="30" rx="5" fill="#f7efe0" stroke="#eadfc4"/>
+            <text x="48" y="141">Turbidity (analog)</text>
+            <rect x="38" y="158" width="214" height="30" rx="5" fill="#e7f1fa" stroke="#cfdded"/>
+            <text x="48" y="177">DS18B20 (suhu)</text>
+            <rect x="38" y="194" width="214" height="30" rx="5" fill="#ececf0" stroke="#d9d9df"/>
+            <text x="48" y="213">Relay</text>
+            <text x="38" y="248" font-size="12" fill="#42545e">GPIO 34 · 35 · 4 · 12 — watermonitoring_esp32.ino</text>
+          </g>
+        </g>
+
+        <!-- Node: Camera -->
+        <g>
+          <rect x="300" y="40" width="190" height="160" rx="8" fill="#ffffff" stroke="#c3d0d6"/>
+          <rect x="300" y="40" width="190" height="34" rx="8" fill="#0b3a43"/>
+          <rect x="300" y="60" width="190" height="14" fill="#0b3a43"/>
+          <text x="312" y="62" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#ffffff">ESP32-CAM #2</text>
+          <text x="312" y="110" font-family="system-ui, sans-serif" font-size="12.5" fill="#132027">Stream &amp; Snapshot</text>
+          <text x="312" y="132" font-family="system-ui, sans-serif" font-size="12" fill="#42545e">port 80 (REST) / port 81 (MJPEG)</text>
+          <text x="312" y="176" font-family="system-ui, sans-serif" font-size="12" fill="#42545e">esp32cam_stream.ino</text>
+        </g>
+
+        <!-- Backend -->
+        <g>
+          <rect x="560" y="80" width="230" height="120" rx="8" fill="#ffffff" stroke="#c3d0d6"/>
+          <rect x="560" y="80" width="230" height="34" rx="8" fill="#117487"/>
+          <rect x="560" y="100" width="230" height="14" fill="#117487"/>
+          <text x="572" y="102" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#ffffff">FastAPI Backend</text>
+          <text x="572" y="140" font-family="system-ui, sans-serif" font-size="12.5" fill="#132027">FastAPI + WS + proxy MJPEG</text>
+          <text x="572" y="162" font-family="system-ui, sans-serif" font-size="12" fill="#42545e">Pydantic Schemas &amp; Async</text>
+        </g>
+
+        <!-- Dashboard -->
+        <g>
+          <rect x="560" y="235" width="230" height="60" rx="8" fill="#eef8f9" stroke="#cfe5e9"/>
+          <text x="572" y="260" font-family="system-ui, sans-serif" font-size="13.5" font-weight="600" fill="#0b3a43">Web Dashboard (client)</text>
+          <text x="572" y="280" font-family="system-ui, sans-serif" font-size="12" fill="#42545e">live data + stream kamera</text>
+        </g>
+
+        <!-- Arrows -->
+        <g stroke="#6a7b85" stroke-width="1.6" fill="none">
+          <path d="M270 140 L556 140" marker-end="url(#arr)"/>
+          <text x="280" y="130" font-family="system-ui, sans-serif" font-size="11" fill="#6a7b85">POST /api/v1/sensors/readings</text>
+          <path d="M490 120 L556 120" marker-end="url(#arr)"/>
+          <text x="496" y="110" font-family="system-ui, sans-serif" font-size="11" fill="#6a7b85">MJPEG :81</text>
+          <path d="M670 200 L670 232" marker-end="url(#arr)"/>
+          <text x="678" y="222" font-family="system-ui, sans-serif" font-size="11" fill="#6a7b85">WS / REST</text>
+        </g>
+      </svg>
+      <p class="figcaption">Alur data: node sensor dan kamera mempublikasikan ke backend FastAPI pada satu origin sehingga dashboard bebas dari masalah CORS.</p>
+    </div>
+
+    <h2 id="wiring">2. Hardware &amp; Wiring</h2>
+    <h3>2.1 Node Sensor (ESP32)</h3>
+    <div class="figure">
+      <img src="Untitled Sketch 2_bb.png" alt="Wiring Diagram Node Sensor ESP32">
+      <p class="figcaption">Skema wiring diagram breadboard untuk Node Sensor ESP32: Modul pH (GPIO 34), Turbidity (GPIO 35), DS18B20 dengan pull-up 4.7 kΩ (GPIO 4), dan Modul Relay (GPIO 27 / RELAY_PIN).*</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Sensor</th><th class="mono">Pin ESP32</th><th>Catatan</th></tr></thead>
+        <tbody>
+          <tr><td>Modul pH (output analog)</td><td class="mono">GPIO 34</td><td>ADC1, toleran 0–3.3 V</td></tr>
+          <tr><td>Modul Turbidity (output analog)</td><td class="mono">GPIO 35</td><td>ADC1</td></tr>
+          <tr><td>DS18B20 (data)</td><td class="mono">GPIO 4</td><td>pull-up <strong>4.7 kΩ</strong> ke 3.3 V</td></tr>
+          <tr><td>Relay (IN)</td><td class="mono">GPIO 27</td><td>modul relay umum aktif LOW (<code>RELAY_PIN 27</code> di firmware)*</td></tr>
+          <tr><td>GND semua sensor</td><td class="mono">GND</td><td>referensi ground disamakan</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <strong>Catatan Pin Relay &amp; ADC</strong>
+      Pada firmware <code>watermonitoring_esp32.ino</code>, pin relay didefinisikan pada <code>#define RELAY_PIN 27</code>. Jika perakitan fisik menggunakan pin lain (misal GPIO 12), pastikan nilai <code>RELAY_PIN</code> pada firmware disesuaikan.<br>
+      GPIO 34 &amp; 35 adalah <em>input-only</em>, aman untuk baca analog. Jangan gunakan pin ADC yang ikut dipakai radio WiFi.
+    </div>
+
+    <h3>2.2 Kamera (AI Thinker ESP32-CAM)</h3>
+    <p>Pin kamera sudah dikodekan di firmware — untuk board <strong>AI Thinker ESP32-CAM</strong> tidak perlu diubah. Jika memakai clone/M5Stack, baris konfigurasi di <code>camInit()</code> yang harus disesuaikan.</p>
+    <pre><code>PWDN=32  RESET=-1  XCLK=0
+SIOD=26  SIOC=27
+D7=35  D6=34  D5=39  D4=36
+D3=21  D2=19  D1=18  D0=5
+VSYNC=25  HREF=23  PCLK=22</code></pre>
+
+    <h2 id="library">3. Library yang Dibutuhkan</h2>
+    <p>Install lewat <strong>Library Manager</strong> Arduino IDE (Sketch → Include Library → Manage Libraries).</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Library</th><th>Firmware</th><th>Fungsi</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">OneWire</td><td>Sensor</td><td>Protokol 1-Wire DS18B20</td></tr>
+          <tr><td class="mono">DallasTemperature</td><td>Sensor</td><td>Abstraksi DS18B20 → derajat C</td></tr>
+          <tr><td class="mono">Preferences</td><td>Sensor</td><td>Simpan kalibrasi di NVS (bawaan core ESP32)</td></tr>
+          <tr><td class="mono">WiFiManager</td><td>Kamera</td><td>Portal konfigurasi WiFi (AP)</td></tr>
+          <tr><td class="mono">WebServer</td><td>Kamera</td><td>Endpoint HTTP <code>/</code> dan <code>/stream</code></td></tr>
+          <tr><td class="mono">esp_camera</td><td>Kamera</td><td>Driver kamera (bawaan core)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>3.1 Board &amp; Partitions</h3>
+    <ul>
+      <li><strong>Board:</strong> <code>AI Thinker ESP32-CAM</code> untuk kamera; <code>ESP32 Dev Module</code> untuk node sensor.</li>
+      <li><strong>Partition scheme:</strong> skema ber-<strong>PSRAM</strong> (mis. <code>Huge APP (3MB No OTA/1MB SPIFFS)</code>).</li>
+      <li><strong>Upload speed:</strong> <code>115200</code>.</li>
+      <li>ESP32-CAM butuh <strong>FTDI USB-UART</strong> untuk upload.</li>
+    </ul>
+    <pre><code>FTDI 5V  → 5V          FTDI TX → U0R (GPIO 3)
+FTDI RX  → U0T (GPIO 1)  FTDI GND → GND
+GPIO0    → GND   (mode flash saat upload)</code></pre>
+
+    <h2 id="pakai-sensor">4. Cara Pakai: Water Monitoring</h2>
+    <ol>
+      <li>Pasang wiring sesuai §2.1.</li>
+      <li>Install library §3, pilih board <code>ESP32 Dev Module</code>.</li>
+      <li>Flash firmware, buka <strong>Serial Monitor</strong> baud <code>115200</code>.</li>
+      <li>Pilih nomor menu + <code>Enter</code>.</li>
+      <li>Pilih opsi <code>1</code> untuk membaca suhu, pH, dan turbidity berulang setiap 2 detik.</li>
+      <li>Saat mode tersebut aktif, ketik <code>stop</code> lalu <code>Enter</code> untuk menghentikan pembacaan dan kembali ke menu.</li>
+    </ol>
+    <pre><code>===== MENU =====
+1. Baca semua sensor berulang (ketik stop untuk berhenti)
+2. Kalibrasi PH (2 titik dinamis)
+3. Kalibrasi Turbidity (2 titik)
+4. Reset kalibrasi
+5. Test relay (ON/OFF bergantian 3x)
+6. Kalibrasi offset PH (short probe ke GND)
+Pilih nomor + Enter:</code></pre>
+    <div class="callout">
+      <strong>Kalibrasi dulu</strong>
+      Sebelum membaca nilai, jalankan opsi 2/3/6 supaya pH &amp; turbidity muncul sebagai angka bermakna, bukan tegangan mentah. Untuk pH, masukkan hasil aktual dari pH meter konvensional.
+    </div>
+
+    <h2 id="pakai-cam">5. Cara Pakai: ESP32-CAM</h2>
+    <ol>
+      <li>Flash firmware (pastikan PSRAM aktif, partition sesuai §3.1).</li>
+      <li><strong>Pertama dinyalakan</strong>: board membuka Access Point <code>ESP32CAM-Setup</code> (password <code>12345678</code>).</li>
+      <li>Hubungkan HP/laptop ke AP itu → buka <code>http://192.168.4.1</code> → pilih WiFi rumah → simpan.</li>
+      <li>Setelah connect, Serial mencetak IP. Buka <code>http://IP/</code> (visual) atau <code>http://IP:81/stream</code> (stream murni).</li>
+    </ol>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Alamat</th><th>Port</th><th>Fungsi</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">http://IP/</td><td class="mono">80</td><td>Halaman visual Web UI + tombol reset WiFi</td></tr>
+          <tr><td class="mono">http://IP/capture</td><td class="mono">80</td><td>Snapshot 1 frame JPEG murni (untuk AI/preview)</td></tr>
+          <tr><td class="mono">http://IP/status</td><td class="mono">80</td><td>Telemetri JSON (IP, RSSI, free heap, status flash)</td></tr>
+          <tr><td class="mono">http://IP/flash?state=1</td><td class="mono">80</td><td>Kontrol Flash LED GPIO 4 (1=ON, 0=OFF)</td></tr>
+          <tr><td class="mono">http://IP/reset</td><td class="mono">80</td><td>Hapus kredensial WiFi, reboot ke Access Point</td></tr>
+          <tr><td class="mono">http://IP:81/stream</td><td class="mono">81</td><td>Stream video MJPEG murni (untuk proxy FastAPI/web)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="kode-sensor">6. Penjelasan Kode: Water Monitoring</h2>
+    <h3>6.1 Include &amp; Definisi Pin</h3>
+    <pre><code>#include &lt;OneWire.h&gt;
+#include &lt;DallasTemperature.h&gt;
+#include &lt;Preferences.h&gt;
+
+#define PH_PIN    34
+#define TURB_PIN  35
+#define TEMP_PIN  4
+#define RELAY_PIN 27
+#define ADC_VREF  3.3f
+#define ADC_MAX   4095.0f</code></pre>
+    <p><code>OneWire</code> + <code>DallasTemperature</code> adalah stack DS18B20. <code>Preferences</code> menyimpan kalibrasi ke NVS agar tetap ada setelah reboot/blackout. <code>ADC_VREF</code>/<code>ADC_MAX</code> mengonversi ADC (0–4095) → volt (0–3.3 V).</p>
+
+    <h3>6.2 Model Kalibrasi Linier</h3>
+    <pre><code>// y = slope * volt + offset (kalibrasi 2 titik)
+struct Cal { float slope, offset; bool valid; };
+Cal calPH = {1.0, 0.0, false}, calTurb = {1.0, 0.0, false};</code></pre>
+    <p><code>valid=false</code> berarti belum dikalibrasi → program mencetak voltase mentah, bukan angka tebakan. Ini mencegah nilai pH/turbidity bohongan.</p>
+
+    <h3>6.3 Pembacaan &amp; Averaging</h3>
+    <pre><code>float readVolt(int pin) { return analogRead(pin) * ADC_VREF / ADC_MAX; }
+
+float applyCal(Cal c, float volt) { return c.slope * volt + c.offset; }
+
+float avgVolt(int pin) {  // 64 sampel untuk buang noise
+  float s = 0;
+  for (int i = 0; i &lt; 64; i++) { s += readVolt(pin); delay(5); }
+  return s / 64.0f;
+}</code></pre>
+    <ul>
+      <li><code>readVolt</code> — konversi ADC mentah → volt.</li>
+      <li><code>applyCal</code> — terapkan model linier slope/offset.</li>
+      <li><code>avgVolt</code> — <strong>64 sampel (≈320 ms)</strong> untuk meredam noise analog.</li>
+    </ul>
+
+    <h3>6.4 Helper Input Serial</h3>
+    <pre><code>bool waitYes() {
+  while (!Serial.available()) delay(10);
+  String s = Serial.readStringUntil('\n'); s.trim();
+  return s.equalsIgnoreCase("y");
+}
+
+float readFloat(const char *prompt) {
+  while (true) {
+    Serial.println(prompt);
+    while (!Serial.available()) delay(10);
+    String s = Serial.readStringUntil('\n'); s.trim();
+    if (s.length() &gt; 0) {
+      float v = s.toFloat();
+      if (v != 0 || s.indexOf('0') &gt;= 0) return v;
+    }
+    Serial.println("Input salah, ulangi.");
+  }
+}</code></pre>
+    <p><code>waitYes</code> blocking menunggu tombol <code>y</code>. <code>readFloat</code> memvalidasi input numerik (menerima <code>0</code> sebagai angka lewat trik <code>indexOf('0')</code>).</p>
+
+    <h3>6.5 Simpan &amp; Muat Kalibrasi (NVS)</h3>
+    <pre><code>void saveCal(const char *key, Cal &amp;c) {
+  prefs.begin("cal", false);
+  prefs.putFloat((String(key) + "m").c_str(), c.slope);   // m = slope
+  prefs.putFloat((String(key) + "b").c_str(), c.offset);  // b = offset
+  prefs.putBool ((String(key) + "ok").c_str(), true);     // ok = valid
+  prefs.end();
+}</code></pre>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Sensor</th><th>slope</th><th>offset</th><th>valid</th></tr></thead>
+        <tbody>
+          <tr><td>pH</td><td class="mono">phm</td><td class="mono">phb</td><td class="mono">phok</td></tr>
+          <tr><td>Turbidity</td><td class="mono">tbm</td><td class="mono">tbb</td><td class="mono">tbok</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>6.6 Kalibrasi 2 Titik</h3>
+    <pre><code>void calibrate(const char *name, const char *key, int pin, Cal &amp;c) {
+  float v1, y1, v2, y2;
+  v1 = avgVolt(pin);
+  y1 = readFloat("Masukkan nilai referensi titik-1:");
+  v2 = avgVolt(pin);
+  y2 = readFloat("Masukkan nilai referensi titik-2:");
+
+  if (fabsf(v2 - v1) &lt; 0.001f) { return; }  // guard pembagi nol
+
+  c.slope  = (y2 - y1) / (v2 - v1);
+  c.offset = y1 - c.slope * v1;
+  c.valid  = true;
+  saveCal(key, c);
+}</code></pre>
+
+    <h3>6.6a Kalibrasi pH Dinamis (<code>calibratePH</code>)</h3>
+    <p>Gunakan dua larutan yang tersedia, misalnya buffer pH 7 dan pH 9. Setelah tegangan setiap titik diukur, masukkan hasil aktual dari pH meter konvensional (contoh <code>7.02</code> dan <code>8.96</code>). Nilai referensi tidak dikunci di kode dan harus berada pada rentang 0–14.</p>
+
+    <h3>6.7 Kalibrasi Offset pH (short probe)</h3>
+    <pre><code>void calShortPH() {
+      float v = captureShortVoltage();   // tampil realtime, ketik y saat stabil
+  if (v &lt; 1.0f || v &gt; 4.0f) { /* peringatan wiring */ }
+  float targetPH = readPHReference("Masukkan pH target untuk kondisi short:");
+  calPH.offset = targetPH - calPH.slope * v;
+  calPH.valid = true;
+  saveCal("ph", calPH);
+}</code></pre>
+    <p>Kalibrasi 1 titik (offset saja): slope tetap dari kalibrasi 2 titik. Saat opsi 6 berjalan, ESP32 menampilkan tegangan <code>PH_PIN</code> secara realtime setiap 500 ms. Tidak perlu multimeter; ketik <code>y</code> saat tegangan stabil, lalu masukkan target pH untuk kondisi short (biasanya 7.00 jika mengikuti titik netral modul). Opsi ini tidak menggantikan kalibrasi dua buffer.</p>
+
+    <h3>6.8 <code>setup()</code> &amp; <code>loop()</code></h3>
+    <pre><code>void setup() {
+  Serial.begin(115200);
+  analogReadResolution(12);       // 0..4095
+  analogSetAttenuation(ADC_11db); // rentang ~3.3V
+  pinMode(RELAY_PIN, OUTPUT);
+  setRelay(false);                // relay aktif-LOW: false = MATI (tulis HIGH) saat boot
+  ds18b20.begin();
+  loadCal();
+  Serial.println("\nWater Monitoring ESP32 siap.");
+}</code></pre>
+    <p><code>loop()</code> adalah menu sederhana: cetak menu → tunggu input → <code>switch</code> atas karakter pertama → aksi → kembali cetak menu.</p>
+
+    <h2 id="kode-cam">7. Penjelasan Kode: ESP32-CAM</h2>
+    <h3>7.1 Pin &amp; Objek</h3>
+    <pre><code>WebServer portal(80);    // halaman utama + reset WiFi
+WebServer streamer(81);  // stream MJPEG bersih
+camera_fb_t *fb = NULL;</code></pre>
+    <p>Dua <code>WebServer</code> dipisah agar <code>handleStream</code> (loop blocking) tidak memblokir endpoint lain.</p>
+
+    <h3>7.2 Konfigurasi Kamera</h3>
+    <pre><code>bool camInit() {
+  camera_config_t cfg = {};
+  // ... pin sesuai board AI Thinker ...
+  cfg.xclk_freq_hz = 20000000;      // clock sensor kamera
+  cfg.pixel_format = PIXFORMAT_JPEG; // output langsung JPEG
+  cfg.frame_size   = FRAMESIZE_QVGA; // 320x240, ringan
+  cfg.jpeg_quality = 12;             // 0..63, makin kecil makin bagus
+  cfg.fb_count     = 1;
+  cfg.fb_location  = CAMERA_FB_IN_DRAM;
+  if (psramFound()) {
+    cfg.frame_size  = FRAMESIZE_SVGA;   // 800x600
+    cfg.fb_count    = 2;
+    cfg.fb_location = CAMERA_FB_IN_PSRAM;
+  }
+  return esp_camera_init(&amp;cfg) == ESP_OK;
+}</code></pre>
+    <ul>
+      <li><code>PIXFORMAT_JPEG</code> → sensor menghasilkan JPEG langsung (hemat bandwidth).</li>
+      <li><code>jpeg_quality=12</code> → kualitas tinggi (0–63, <strong>0 = terbaik</strong>).</li>
+      <li>Tanpa PSRAM: <code>QVGA</code> + 1 buffer DRAM. Dengan PSRAM: <code>SVGA</code> + 2 buffer.</li>
+    </ul>
+
+    <h3>7.3 Handler Endpoint &amp; MJPEG (Dual Server Port 80 &amp; 81)</h3>
+    <pre><code>// Port 80: REST API &amp; Web UI (non-blocking)
+portal.on("/", HTTP_GET, handleRoot);
+portal.on("/capture", HTTP_GET, handleCapture);  // 1 frame JPEG murni
+portal.on("/status", HTTP_GET, handleStatus);    // Telemetri JSON
+portal.on("/flash", HTTP_GET, handleFlash);      // Kendali LED Flash GPIO 4
+portal.on("/reset", HTTP_GET, handleReset);      // Reset WiFi NVS
+
+// Port 81: Dedicated MJPEG Streamer
+streamer.on("/stream", HTTP_GET, handleStream);  // Streaming multipart</code></pre>
+    <p>Dua <code>WebServer</code> dipisah agar <code>handleStream</code> (loop streaming blocking) tidak memblokir endpoint REST API, snapshot single-frame, maupun dashboard FastAPI.</p>
+
+    <div class="figure">
+      <svg viewBox="0 0 820 120" role="img" aria-label="Struktur frame MJPEG: boundary, header Content-Type, Content-Length, data gambar, diulang">
+        <g font-family="ui-monospace, monospace" font-size="12.5">
+          <rect x="20" y="18" width="126" height="84" rx="6" fill="#eef8f9" stroke="#cfe5e9"/>
+          <text x="32" y="42" fill="#0b3a43">--frame</text>
+          <text x="32" y="60" fill="#42545e">Content-Type:</text>
+          <text x="138" y="60" fill="#42545e">image/jpeg</text>
+          <text x="32" y="78" fill="#42545e">Content-Length: N</text>
+
+          <rect x="172" y="18" width="120" height="84" rx="6" fill="#ffffff" stroke="#c3d0d6"/>
+          <text x="182" y="52" fill="#132027">[ byte gambar ]</text>
+          <text x="182" y="70" fill="#6a7b85">fb-&gt;buf</text>
+
+          <text x="310" y="70" fill="#6a7b85" font-size="16">→</text>
+
+          <rect x="340" y="18" width="126" height="84" rx="6" fill="#eef8f9" stroke="#cfe5e9"/>
+          <text x="352" y="42" fill="#0b3a43">--frame</text>
+          <text x="352" y="60" fill="#42545e">Content-Type: ...</text>
+          <text x="352" y="78" fill="#42545e">[ byte gambar ]</text>
+
+          <text x="484" y="70" fill="#6a7b85" font-size="16">→</text>
+
+          <text x="516" y="56" fill="#6a7b85">… berulang selama</text>
+          <text x="516" y="74" fill="#6a7b85">client terhubung</text>
+        </g>
+      </svg>
+      <p class="figcaption">Stream MJPEG = serangkaian boundary + header + byte JPEG yang dikirim berulang lewat satu koneksi HTTP.</p>
+    </div>
+
+    <h3>7.4 Connect &amp; Portal WiFi</h3>
+    <pre><code>WiFiManager wm;
+wm.setConfigPortalTimeout(180);
+if (WiFi.SSID() == "" || WiFi.waitForConnectResult() != WL_CONNECTED) {
+  wm.autoConnect("ESP32CAM-Setup", "12345678");
+}</code></pre>
+    <p><code>WiFiManager</code> menangani dua kasus: kredensial tersimpan → connect langsung; gagal → buka AP captive portal.</p>
+
+    <h2 id="kalibrasi">8. Kalibrasi: Konsep, Rumus Matematika, &amp; Penerapan di Kode Implementasi</h2>
+    <h3>8.1 Model Matematika Linier (y = m·V + b)</h3>
+    <p>Sensor analog pH dan turbidity menghasilkan tegangan analog (0.0 V – 3.3 V). Hubungan antara tegangan keluaran (V) dengan nilai fisik (y, berupa derajat pH atau satuan NTU) dimodelkan sebagai persamaan linier:</p>
+    <div class="formula">y = m × V + b</div>
+    <ul>
+      <li><strong>Probe pH:</strong> Memiliki kemiringan negatif (m &lt; 0). Pada pH rendah (asam), tegangan tinggi. Pada pH tinggi (basa), tegangan turun.</li>
+      <li><strong>Sensor Turbidity:</strong> Semakin bening air (0 NTU), cahaya inframerah lolos maksimal sehingga tegangan tinggi. Semakin keruh, tegangan turun.</li>
+    </ul>
+
+    <h3>8.2 Perhitungan Slope dan Offset Dua Titik</h3>
+    <div class="formula">m = (y₂ − y₁) / (V₂ − V₁) &nbsp;&nbsp;·&nbsp;&nbsp; b = y₁ − (m × V₁)</div>
+    <div class="figure">
+      <svg viewBox="0 0 560 320" role="img" aria-label="Grafik kalibrasi dua titik: garis lurus melewati dua titik ukur pada sumbu voltase dan nilai fisik">
+        <defs>
+          <marker id="arrAxis" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#6a7b85"/>
+          </marker>
+        </defs>
+        <g stroke="#6a7b85" stroke-width="1.4" fill="none">
+          <path d="M60 270 L520 270" marker-end="url(#arrAxis)"/>
+          <path d="M60 270 L60 30" marker-end="url(#arrAxis)"/>
+        </g>
+        <g stroke="#dde5e9" stroke-width="1">
+          <line x1="60" y1="90" x2="520" y2="90"/>
+          <line x1="60" y1="150" x2="520" y2="150"/>
+          <line x1="60" y1="210" x2="520" y2="210"/>
+          <line x1="175" y1="270" x2="175" y2="30"/>
+          <line x1="290" y1="270" x2="290" y2="30"/>
+          <line x1="405" y1="270" x2="405" y2="30"/>
+        </g>
+        <line x1="150" y1="220" x2="420" y2="100" stroke="#117487" stroke-width="2.5"/>
+        <circle cx="210" cy="195" r="5.5" fill="#b3402a"/>
+        <circle cx="380" cy="120" r="5.5" fill="#b3402a"/>
+        <g font-family="system-ui, sans-serif" font-size="13" fill="#132027">
+          <text x="60" y="292">tegangan (V)</text>
+          <text x="30" y="45" transform="rotate(-90 30 45)">nilai fisik (pH / NTU)</text>
+          <circle cx="210" cy="195" r="3" fill="#b3402a"/>
+          <text x="224" y="188" fill="#b3402a" font-weight="600">(V₁, y₁)</text>
+          <text x="394" y="104" fill="#b3402a" font-weight="600">(V₂, y₂)</text>
+          <text x="150" y="230" fill="#117487" font-weight="600">m = Δy / ΔV</text>
+        </g>
+      </svg>
+      <p class="figcaption">Dua titik kalibrasi mendefinisikan garis; <code>offset</code> (b) adalah perpotongan garis dengan sumbu nilai saat V = 0.</p>
+    </div>
+
+    <h3>8.3 Struktur Data di Firmware dan Penyimpanan NVS</h3>
+    <p>Nilai slope dan offset dibungkus dalam <code>struct Cal</code> dan disimpan ke NVS flash menggunakan library <code>Preferences.h</code>:</p>
+    <pre><code>// y = slope * volt + offset (kalibrasi 2 titik)
+struct Cal { float slope, offset; bool valid; };
+Cal calPH = {1.0, 0.0, false}, calTurb = {1.0, 0.0, false};
+
+// Simpan ke Flash NVS
+void saveCal(const char *key, Cal &amp;c) {
+  prefs.begin("cal", false);
+  prefs.putFloat((String(key) + "m").c_str(), c.slope);
+  prefs.putFloat((String(key) + "b").c_str(), c.offset);
+  prefs.putBool ((String(key) + "ok").c_str(), true);
+  prefs.end();
+}
+
+// Muat dari Flash NVS saat startup
+void loadCal() {
+  prefs.begin("cal", true);
+  if (prefs.getBool("phok", false)) {
+    calPH.slope  = prefs.getFloat("phm", 1.0);
+    calPH.offset = prefs.getFloat("phb", 0.0);
+    calPH.valid  = true;
+  }
+  if (prefs.getBool("tbok", false)) {
+    calTurb.slope  = prefs.getFloat("tbm", 1.0);
+    calTurb.offset = prefs.getFloat("tbb", 0.0);
+    calTurb.valid  = true;
+  }
+  prefs.end();
+}</code></pre>
+
+    <h3>8.4 Penerapan Nilai Kalibrasi pada Runtime (applyCal)</h3>
+    <p>Saat startup, nilai kalibrasi ditarik dari NVS via <code>loadCal()</code>. Pada saat pembacaan sensor:</p>
+    <pre><code>float readVolt(int pin) { return analogRead(pin) * ADC_VREF / ADC_MAX; }
+
+float applyCal(Cal c, float volt) { return c.slope * volt + c.offset; }
+
+float avgVolt(int pin) {  // 64 sampel untuk buang noise
+  float s = 0;
+  for (int i = 0; i &lt; 64; i++) { s += readVolt(pin); delay(5); }
+  return s / 64.0f;
+}
+
+// Eksekusi di runtime
+if (calPH.valid) {
+  Serial.println(applyCal(calPH, avgVolt(PH_PIN)), 2);
+} else {
+  Serial.print("BELUM KALIBRASI, volt=");
+  Serial.println(avgVolt(PH_PIN), 3);
+}</code></pre>
+
+    <h3>8.5 Contoh Numerik Nyata (Studi Kasus pH)</h3>
+    <ol>
+      <li><strong>Titik 1 (Buffer pH 7.00):</strong> Terbaca tegangan rata-rata <code>V₁ = 2.250 V</code>.</li>
+      <li><strong>Titik 2 (Buffer pH 9.00):</strong> Terbaca tegangan rata-rata <code>V₂ = 1.950 V</code>.</li>
+      <li><strong>Perhitungan Slope (m):</strong> <code>m = (9.00 - 7.00) / (1.950 - 2.250) = 2.00 / -0.300 = -6.6667</code></li>
+      <li><strong>Perhitungan Offset (b):</strong> <code>b = 7.00 - (-6.6667 × 2.250) = 7.00 - (-15.000) = 22.000</code></li>
+      <li><strong>Pengujian Air Kolam:</strong> Sensor membaca tegangan <code>V = 2.100 V</code>.</li>
+      <li><code>pH = (-6.6667 × 2.100) + 22.000 = -14.000 + 22.000 = 8.00</code>. Nilai 8.00 dikirim ke FastAPI!</li>
+    </ol>
+
+    <h2 id="backend">9. Integrasi Backend FastAPI &amp; Client Dashboard</h2>
+    <h3>9.1 Arsitektur Backend FastAPI</h3>
+    <p>Backend dibangun menggunakan <strong>Python FastAPI</strong> dengan arsitektur asynchronous, validasi schema Pydantic, reverse-proxy streaming MJPEG, dan WebSocket broadcaster.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Metode</th><th class="mono">Endpoint</th><th>Tipe</th><th>Fungsi</th></tr></thead>
+        <tbody>
+          <tr><td>GET</td><td class="mono">/health</td><td>JSON</td><td>Status backend dan buffer data</td></tr>
+          <tr><td>POST</td><td class="mono">/api/v1/sensors/readings</td><td>JSON</td><td>ESP32 mengirim telemetri sensor</td></tr>
+          <tr><td>GET</td><td class="mono">/api/v1/sensors/latest</td><td>JSON</td><td>Data sensor terbaru</td></tr>
+          <tr><td>GET</td><td class="mono">/api/v1/sensors/readings</td><td>JSON</td><td>Riwayat telemetri paginasi (?limit=50&amp;offset=0)</td></tr>
+          <tr><td>POST</td><td class="mono">/api/v1/sensors/relay</td><td>JSON</td><td>Kontrol status target relay</td></tr>
+          <tr><td>GET</td><td class="mono">/api/v1/sensors/relay</td><td>JSON</td><td>Ambil status target relay saat ini</td></tr>
+          <tr><td>GET</td><td class="mono">/api/v1/camera/stream</td><td>MJPEG</td><td>Proxy streaming kamera ke web dashboard</td></tr>
+          <tr><td>GET</td><td class="mono">/api/v1/camera/snapshot</td><td>JPEG</td><td>Ambil 1 frame foto murni</td></tr>
+          <tr><td>POST</td><td class="mono">/api/v1/camera/flash</td><td>JSON</td><td>Kontrol lampu LED flash kamera</td></tr>
+          <tr><td>WS</td><td class="mono">/ws/sensors</td><td>JSON</td><td>WebSocket telemetri realtime</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>9.2 Kode Backend: <code>fastapi_backend/main.py</code></h3>
+    <div class="code-label">fastapi_backend/main.py — Core Ingestion &amp; MJPEG Proxy</div>
+    <pre><code>from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+import httpx
+
+app = FastAPI(title="Water Monitoring IoT Backend", version="1.0.0")
+
+class SensorReadingCreate(BaseModel):
+    temperature: float = Field(..., description="Suhu air dalam Celsius")
+    ph: float = Field(..., ge=0.0, le=14.0, description="pH terkalibrasi")
+    turbidity: float = Field(..., ge=0.0, description="Kekeruhan NTU")
+    relay: bool = Field(default=False, description="Status relay")
+    device_id: str = Field(default="esp32-sensor-01", description="Identifier node")
+
+# Endpoint proxy streaming MJPEG dari ESP32-CAM (Port 81)
+@app.get("/api/v1/camera/stream")
+async def camera_stream_proxy():
+    camera_url = "http://192.168.1.150:81/stream"
+    async def mjpeg_generator():
+        async with httpx.AsyncClient(timeout=None) as client:
+            async with client.stream("GET", camera_url) as resp:
+                async for chunk in resp.aiter_raw():
+                    yield chunk
+
+    return StreamingResponse(
+        mjpeg_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )</code></pre>
+        mjpeg_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )</code></pre>
+
+    <h3>9.3 Menjalankan Server FastAPI</h3>
+    <pre><code>cd fastapi_backend
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload</code></pre>
+    <p>Buka dokumentasi interaktif Swagger di <code>http://localhost:8000/docs</code>.</p>
+
+    <h2 id="modifikasi">10. Modifikasi Firmware untuk Kirim Data ke FastAPI</h2>
+    <p>Firmware sensor mengirimkan payload JSON terstruktur ke endpoint <code>POST /api/v1/sensors/readings</code>.</p>
+
+    <div class="code-label">Tambahan pada watermonitoring_esp32.ino</div>
+    <pre><code>#include &lt;WiFi.h&gt;
+#include &lt;HTTPClient.h&gt;
+
+const char* SSID = "NAMA_WIFI";
+const char* PASS = "PASSWORD_WIFI";
+const char* FASTAPI_URL = "http://192.168.1.100:8000/api/v1/sensors/readings";
+
+void postReading(float t, float ph, float turb, bool relay) {
+  if (WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.begin(FASTAPI_URL);
+  http.addHeader("Content-Type", "application/json");
+
+  String body = "{\"temperature\":" + String(t, 2)
+              + ",\"ph\":"            + String(ph &gt;= 0 ? ph : 7.0, 2)
+              + ",\"turbidity\":"     + String(turb &gt;= 0 ? turb : 0.0, 1)
+              + ",\"relay\":"         + String(relay ? "true" : "false")
+              + ",\"device_id\":\"esp32-sensor-01\""
+              + "}";
+  http.POST(body);
+  http.end();
+}</code></pre>
+
+    <h3>10.1 Web Dashboard (client)</h3>
+    <div class="code-label">dashboard/index.html — embed stream + live text via WebSocket</div>
+    <pre><code>&lt;!-- Stream Kamera via Proxy FastAPI (Bebas CORS) --&gt;
+&lt;img id="cam" src="http://localhost:8000/api/v1/camera/stream" alt="Live camera" /&gt;
+&lt;dl&gt;
+  &lt;dt&gt;Suhu&lt;/dt&gt;      &lt;dd id="temp"&gt;—&lt;/dd&gt;
+  &lt;dt&gt;pH&lt;/dt&gt;        &lt;dd id="ph"&gt;—&lt;/dd&gt;
+  &lt;dt&gt;Kekeruhan&lt;/dt&gt; &lt;dd id="turb"&gt;—&lt;/dd&gt;
+&lt;/dl&gt;
+&lt;script&gt;
+  const ws = new WebSocket('ws://localhost:8000/ws/sensors');
+  ws.onmessage = (e) =&gt; {
+    const d = JSON.parse(e.data);
+    document.getElementById('temp').textContent = d.temperature + ' °C';
+    document.getElementById('ph').textContent   = d.ph.toFixed(2);
+    document.getElementById('turb').textContent = d.turbidity.toFixed(1) + ' NTU';
+  };
+&lt;/script&gt;</code></pre>
+
+    <h2 id="troubleshoot">11. Troubleshooting</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Gejala</th><th>Penyebab umum</th><th>Solusi</th></tr></thead>
+        <tbody>
+          <tr><td>Serial: "Kamera gagal init"</td><td>PSRAM tak aktif</td><td>Pakai partition scheme ber-PSRAM; cek <code>psramFound()</code></td></tr>
+          <tr><td>AP <code>ESP32CAM-Setup</code> tak muncul</td><td>Sudah ada kredensial / timeout portal</td><td><code>http://IP/reset</code> atau flash erase NVS</td></tr>
+          <tr><td>Stream putus tiap beberapa detik</td><td>Buffer leak</td><td>Pastikan <code>esp_camera_fb_return</code> selalu dipanggil</td></tr>
+          <tr><td>Tampil "BELUM KALIBRASI"</td><td>Belum pernah kalibrasi</td><td>Jalankan opsi 2/3/6 di Serial Monitor</td></tr>
+          <tr><td>Bacaan pH mentok / aneh</td><td>Probe kering / rentang ADC</td><td>Cek <code>ADC_11db</code>; rendam buffer pH 4 atau 7</td></tr>
+          <tr><td>DS18B20 "-127 °C"</td><td>Kabel salah / no pull-up</td><td>Cek GPIO 4 + 4.7 kΩ ke 3.3 V</td></tr>
+          <tr><td>FastAPI Connection Refused</td><td>IP backend / port salah</td><td>Cek IP laptop di WiFi, pastikan port 8000 terbuka di firewall</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="lampiran-istilah">Lampiran A — Istilah &amp; Singkatan</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Istilah</th><th>Arti</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">FastAPI</td><td>Modern, high-performance web framework Python berbasis Starlette dan Pydantic</td></tr>
+          <tr><td class="mono">ADC</td><td>Analog-to-Digital Converter (baca tegangan sensor 0–3.3V)</td></tr>
+          <tr><td class="mono">NVS</td><td>Non-Volatile Storage — memori flash internal ESP32 penyimpan kalibrasi</td></tr>
+          <tr><td class="mono">MJPEG</td><td>Motion JPEG — streaming frame gambar berurutan via HTTP multipart</td></tr>
+          <tr><td class="mono">PSRAM</td><td>RAM eksternal ESP32-CAM (8 MB), wajib untuk resolusi video tinggi</td></tr>
+          <tr><td class="mono">NTU</td><td>Nephelometric Turbidity Unit — satuan kekeruhan air</td></tr>
+          <tr><td class="mono">slope/offset</td><td>Parameter kalibrasi garis lurus: <code>y = m·V + b</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="lampiran-pin">Lampiran B — Referensi Pin Cepat</h2>
+    <pre><code>WATER MONITORING            ESP32-CAM (AI Thinker)
+  pH      -&gt; GPIO 34          PWDN 32   RESET -1
+  Turb    -&gt; GPIO 35          XCLK 0    SIOD 26  SIOC 27
+  DS18B20 -&gt; GPIO 4 (4k7)     D7 35 D6 34 D5 39 D4 36
+  Relay   -&gt; GPIO 27*         D3 21 D2 19 D1 18 D0 5
+                              VSYNC 25 HREF 23 PCLK 22
+
+  * Catatan: RELAY_PIN didefinisikan ke GPIO 27 pada watermonitoring_esp32.ino</code></pre>
+
+    <footer>
+      Dokumentasi teknis · Water Monitoring + ESP32-CAM · dibuat untuk tim client. Versi Markdown tersedia di <code>docs/watermonitoring-dokumentasi.md</code>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>
